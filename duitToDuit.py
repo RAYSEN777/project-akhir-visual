@@ -1,41 +1,120 @@
 import sys
+import sqlite3
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QMessageBox, QComboBox,
-    QScrollArea, QMainWindow, QAction, QStackedWidget,  QFontDialog, QListWidget
+    QScrollArea, QMainWindow, QAction, QStackedWidget, QFontDialog, 
+    QListWidget, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
+    QDialogButtonBox, QStatusBar
 )
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
 from style import light_style, dark_style
 
 API_KEY = "df70c2e44c333d54929d40d3"
 
-class CurrencyNotifier(QMainWindow):
+class AddCurrencyDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Tambah Mata Uang ke Database")
+        self.setModal(True)
+        self.resize(400, 200)
+        
+        layout = QVBoxLayout()
+        
+        country_layout = QHBoxLayout()
+        country_layout.addWidget(QLabel("Nama Negara:"))
+        self.country_input = QLineEdit()
+        self.country_input.setPlaceholderText("Contoh: Indonesia")
+        country_layout.addWidget(self.country_input)
+        layout.addLayout(country_layout)
+        
+        currency_layout = QHBoxLayout()
+        currency_layout.addWidget(QLabel("Nama Mata Uang:"))
+        self.currency_input = QLineEdit()
+        self.currency_input.setPlaceholderText("Contoh: Rupiah (IDR)")
+        currency_layout.addWidget(self.currency_input)
+        layout.addLayout(currency_layout)
+        
+        rate_layout = QHBoxLayout()
+        rate_layout.addWidget(QLabel("Rate terhadap USD:"))
+        self.rate_input = QLineEdit()
+        self.rate_input.setPlaceholderText("Contoh: 15000 (1 USD = 15000 IDR)")
+        rate_layout.addWidget(self.rate_input)
+        layout.addLayout(rate_layout)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.setLayout(layout)
+    
+    def get_data(self):
+        return {
+            'negara': self.country_input.text().strip(),
+            'mata_uang': self.currency_input.text().strip(),
+            'rate': self.rate_input.text().strip()
+        }
+
+class DuitToDuit(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Currency Exchange Rate Notifier")
-        self.resize(500, 300)
+        self.resize(600, 400)
 
         self.setStyleSheet(light_style)
 
         self.all_currencies = []  
+        
+        self.init_db()
 
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
         self.exchange_page = QWidget()
         self.currency_page = QWidget()
+        self.database_page = QWidget()
 
         self.stack.addWidget(self.exchange_page)
         self.stack.addWidget(self.currency_page)
+        self.stack.addWidget(self.database_page)
 
         self.init_menu()
+        self.init_status_bar()
         self.init_exchange_page()
         self.init_currency_page()
+        self.init_database_page()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.check_rate)
         self.timer.start(60000)
+
+    def init_status_bar(self):
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+
+        self.name_nim_label = QLabel("Teguh Dwi Julyanto - F1D022098")
+        self.name_nim_label.setAlignment(Qt.AlignRight)
+
+        self.status_bar.addPermanentWidget(self.name_nim_label)
+    
+    def init_db(self):
+        self.conn = sqlite3.connect('Duit.db')
+        cur = self.conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS "Duit" (
+                "id"	INTEGER,
+                "namaNegara"	TEXT,
+                "namaMataUang"	TEXT,
+                "perbandinganDariDolar"	REAL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        ''')
+        self.conn.commit()
+
+    def update_status(self, message):
+        self.status_label.setText(message)
 
     def init_menu(self):
         menubar = self.menuBar()
@@ -55,6 +134,14 @@ class CurrencyNotifier(QMainWindow):
         weakest_action.triggered.connect(lambda: self.show_top_currencies(order="asc"))
         data_menu.addAction(strongest_action)
         data_menu.addAction(weakest_action)
+        
+        database_menu = menubar.addMenu("Database")
+        view_db_action = QAction("Lihat Database", self)
+        view_db_action.triggered.connect(self.show_database_page)
+        add_currency_action = QAction("Tambah Mata Uang", self)
+        add_currency_action.triggered.connect(self.show_add_currency_dialog)
+        database_menu.addAction(view_db_action)
+        database_menu.addAction(add_currency_action)
 
         view_menu = menubar.addMenu("View")
         self.dark_mode_action = QAction("Dark Mode", self)
@@ -127,6 +214,116 @@ class CurrencyNotifier(QMainWindow):
 
         layout.addWidget(scroll_area)
         self.currency_page.setLayout(layout)
+    
+    def init_database_page(self):
+        layout = QVBoxLayout()
+        
+        title_label = QLabel("Database Mata Uang")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin: 10px;")
+        layout.addWidget(title_label)
+        
+        button_layout = QHBoxLayout()
+        self.btn_refresh_db = QPushButton("Refresh Data")
+        self.btn_refresh_db.clicked.connect(self.refresh_database_table)
+        self.btn_add_currency = QPushButton("Tambah Mata Uang")
+        self.btn_add_currency.clicked.connect(self.show_add_currency_dialog)
+        self.btn_delete_currency = QPushButton("Hapus Terpilih")
+        self.btn_delete_currency.clicked.connect(self.delete_selected_currency)
+        
+        button_layout.addWidget(self.btn_refresh_db)
+        button_layout.addWidget(self.btn_add_currency)
+        button_layout.addWidget(self.btn_delete_currency)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        self.db_table = QTableWidget()
+        self.db_table.setColumnCount(4)
+        self.db_table.setHorizontalHeaderLabels(["ID", "Nama Negara", "Nama Mata Uang", "Rate (USD)"])
+        
+        header = self.db_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        
+        layout.addWidget(self.db_table)
+        self.database_page.setLayout(layout)
+
+    def show_database_page(self):
+        self.refresh_database_table()
+        self.stack.setCurrentWidget(self.database_page)
+    
+    def refresh_database_table(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM Duit ORDER BY id")
+        rows = cur.fetchall()
+        
+        self.db_table.setRowCount(len(rows))
+        
+        for i, row in enumerate(rows):
+            for j, value in enumerate(row):
+                self.db_table.setItem(i, j, QTableWidgetItem(str(value)))
+    
+    def show_add_currency_dialog(self):
+        dialog = AddCurrencyDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            data = dialog.get_data()
+            
+            if not data['negara'] or not data['mata_uang'] or not data['rate']:
+                QMessageBox.warning(self, "Input Error", "Semua field harus diisi!")
+                return
+            try:
+                rate = float(data['rate'])
+            except ValueError:
+                QMessageBox.warning(self, "Input Error", "Rate harus berupa angka!")
+                return
+            
+            self.insert_currency_to_db(data['negara'], data['mata_uang'], rate)
+    
+    def insert_currency_to_db(self, negara, mata_uang, rate):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("""
+                INSERT INTO Duit (namaNegara, namaMataUang, perbandinganDariDolar) 
+                VALUES (?, ?, ?)
+            """, (negara, mata_uang, rate))
+            self.conn.commit()
+            
+            QMessageBox.information(self, "Berhasil", 
+                f"Mata uang {mata_uang} dari {negara} berhasil ditambahkan ke database!")
+            
+            
+            if self.stack.currentWidget() == self.database_page:
+                self.refresh_database_table()
+                
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"Gagal menambahkan data: {e}")
+    
+    def delete_selected_currency(self):
+        current_row = self.db_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Pilih Data", "Pilih mata uang yang ingin dihapus!")
+            return
+        
+        id_item = self.db_table.item(current_row, 0)
+        if not id_item:
+            return
+            
+        currency_id = id_item.text()
+        currency_name = self.db_table.item(current_row, 2).text()
+        
+        reply = QMessageBox.question(self, "Konfirmasi Hapus", 
+            f"Apakah Anda yakin ingin menghapus {currency_name}?",
+            QMessageBox.Yes | QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            try:
+                cur = self.conn.cursor()
+                cur.execute("DELETE FROM Duit WHERE id = ?", (currency_id,))
+                self.conn.commit()
+                
+                QMessageBox.information(self, "Berhasil", "Data berhasil dihapus!")
+                self.refresh_database_table()
+                
+            except sqlite3.Error as e:
+                QMessageBox.critical(self, "Database Error", f"Gagal menghapus data: {e}")
 
     def toggle_dark_mode(self, checked):
         if checked:
@@ -200,12 +397,126 @@ class CurrencyNotifier(QMainWindow):
             if data["result"] == "success":
                 rate = data["conversion_rate"]
                 converted = amount * rate
-                QMessageBox.information(self, "Conversion Result",
-                    f"{amount} {from_cur} = {converted:.4f} {to_cur}")
+                
+                self.show_conversion_result_with_options(from_cur, to_cur, amount, converted, rate)
             else:
                 QMessageBox.warning(self, "API Error", "Gagal mengambil data nilai tukar.")
         except Exception as e:
             QMessageBox.warning(self, "Network Error", f"Kesalahan jaringan: {e}")
+    
+    def show_conversion_result_with_options(self, from_cur, to_cur, amount, converted, rate):
+        """Tampilkan hasil konversi dengan opsi untuk menambah mata uang ke database"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Conversion Result")
+        msg.setText(f"{amount} {from_cur} = {converted:.2f} {to_cur}\n\nRate: 1 {from_cur} = {rate:.2f} {to_cur}")
+        msg.setIcon(QMessageBox.Information)
+        
+        btn_ok = msg.addButton("OK", QMessageBox.AcceptRole)
+        btn_add_from = msg.addButton(f"Tambah {from_cur} ke Database", QMessageBox.ActionRole)
+        btn_add_to = msg.addButton(f"Tambah {to_cur} ke Database", QMessageBox.ActionRole)
+        
+        msg.exec_()
+        
+        if msg.clickedButton() == btn_add_from:
+            self.add_currency_from_conversion(from_cur, 1.0)  
+        elif msg.clickedButton() == btn_add_to:
+            self.add_currency_from_conversion(to_cur, rate if from_cur == "USD" else self.get_usd_rate(to_cur))
+    
+    def get_usd_rate(self, currency_code):
+        """Ambil rate mata uang terhadap USD"""
+        url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/pair/USD/{currency_code}"
+        try:
+            response = requests.get(url)
+            data = response.json()
+            if data["result"] == "success":
+                return data["conversion_rate"]
+        except Exception as e:
+            print(f"Error getting USD rate: {e}")
+        return 1.0
+    
+    def add_currency_from_conversion(self, currency_code, rate):
+        currency_name = "Unknown Currency"
+        country_name = "Unknown Country"
+        
+        for code, name in self.all_currencies:
+            if code == currency_code:
+                currency_name = name
+                
+                if " Dollar" in name:
+                    country_name = name.replace(" Dollar", "")
+                elif " Pound" in name:
+                    country_name = name.replace(" Pound", "")
+                elif " Euro" in name:
+                    country_name = "European Union"
+                elif " Yen" in name:
+                    country_name = "Japan"
+                elif " Yuan" in name or " Renminbi" in name:
+                    country_name = "China"
+                elif " Rupiah" in name:
+                    country_name = "Indonesia"
+                elif " Peso" in name:
+                    country_name = name.replace(" Peso", "")
+                else:
+                    
+                    country_name = name.split()[0] if name.split() else "Unknown"
+                break
+        
+        dialog = AddCurrencyDialog(self)
+        dialog.country_input.setText(country_name)
+        dialog.currency_input.setText(f"{currency_name} ({currency_code})")
+        dialog.rate_input.setText(f"{rate:.2f}")
+        
+        if dialog.exec_() == QDialog.Accepted:
+            data = dialog.get_data()
+            
+            if not data['negara'] or not data['mata_uang'] or not data['rate']:
+                QMessageBox.warning(self, "Input Error", "Semua field harus diisi!")
+                return
+            
+            try:
+                rate_value = float(data['rate'])
+            except ValueError:
+                QMessageBox.warning(self, "Input Error", "Rate harus berupa angka!")
+                return
+            
+            if self.currency_exists_in_db(currency_code):
+                reply = QMessageBox.question(self, "Mata Uang Sudah Ada", 
+                    f"Mata uang {currency_code} sudah ada di database. Apakah ingin mengupdate rate-nya?",
+                    QMessageBox.Yes | QMessageBox.No)
+                
+                if reply == QMessageBox.Yes:
+                    self.update_currency_rate(currency_code, rate_value)
+            else:
+                
+                self.insert_currency_to_db(data['negara'], data['mata_uang'], rate_value)
+    
+    def currency_exists_in_db(self, currency_code):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM Duit WHERE namaMataUang LIKE ?", (f"%{currency_code}%",))
+            count = cur.fetchone()[0]
+            return count > 0
+        except sqlite3.Error:
+            return False
+    
+    def update_currency_rate(self, currency_code, new_rate):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("""
+                UPDATE Duit 
+                SET perbandinganDariDolar = ? 
+                WHERE namaMataUang LIKE ?
+            """, (new_rate, f"%{currency_code}%"))
+            self.conn.commit()
+            
+            QMessageBox.information(self, "Berhasil", 
+                f"Rate mata uang {currency_code} berhasil diupdate!")
+            
+            if self.stack.currentWidget() == self.database_page:
+                self.refresh_database_table()
+                
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"Gagal mengupdate rate: {e}")
 
     def show_top_currencies(self, order="desc"):
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD"
@@ -219,7 +530,7 @@ class CurrencyNotifier(QMainWindow):
                 title = "Terlemah" if order == "desc" else "Terkuat"
                 text = f"<b>Top 20 Mata Uang {title.capitalize()} terhadap USD:</b><br><br>"
                 for code, rate in top_20:
-                    text += f"{code}: {rate:.4f}<br>"
+                    text += f"{code}: {rate:.2f}<br>"
                 self.top_label.setText(text)
                 self.stack.setCurrentWidget(self.currency_page)
             else:
@@ -227,9 +538,15 @@ class CurrencyNotifier(QMainWindow):
         except Exception as e:
             self.top_label.setText(f"Kesalahan jaringan: {e}")
         self.stack.setCurrentWidget(self.currency_page)
+    
+    def closeEvent(self, event):
+        
+        if hasattr(self, 'conn'):
+            self.conn.close()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = CurrencyNotifier()
+    window = DuitToDuit()
     window.show()
     sys.exit(app.exec_())
