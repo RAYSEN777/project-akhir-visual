@@ -2,13 +2,14 @@ import sys
 import sqlite3
 import requests
 import time
+import csv
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QMessageBox, QComboBox,
     QScrollArea, QMainWindow, QAction, QStackedWidget, QFontDialog, 
     QListWidget, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
-    QDialogButtonBox, QStatusBar
+    QDialogButtonBox, QStatusBar, QFileDialog
 )
 from PyQt5.QtCore import QTimer, Qt
 from style import light_style, dark_style
@@ -151,8 +152,12 @@ class DuitToDuit(QMainWindow):
         view_db_action.triggered.connect(self.show_database_page)
         add_currency_action = QAction("Tambah Mata Uang", self)
         add_currency_action.triggered.connect(self.show_add_currency_dialog)
+        export_csv_action = QAction("Export ke CSV", self)
+        export_csv_action.triggered.connect(self.export_to_csv)
         database_menu.addAction(view_db_action)
         database_menu.addAction(add_currency_action)
+        database_menu.addSeparator() 
+        database_menu.addAction(export_csv_action)
 
         view_menu = menubar.addMenu("View")
         self.dark_mode_action = QAction("Dark Mode", self)
@@ -240,10 +245,13 @@ class DuitToDuit(QMainWindow):
         self.btn_add_currency.clicked.connect(self.show_add_currency_dialog)
         self.btn_delete_currency = QPushButton("Hapus Terpilih")
         self.btn_delete_currency.clicked.connect(self.delete_selected_currency)
+        self.btn_export_csv = QPushButton("Export ke CSV")
+        self.btn_export_csv.clicked.connect(self.export_to_csv)
         
         button_layout.addWidget(self.btn_refresh_db)
         button_layout.addWidget(self.btn_add_currency)
         button_layout.addWidget(self.btn_delete_currency)
+        button_layout.addWidget(self.btn_export_csv)
         button_layout.addStretch()
         layout.addLayout(button_layout)
         
@@ -256,6 +264,55 @@ class DuitToDuit(QMainWindow):
         
         layout.addWidget(self.db_table)
         self.database_page.setLayout(layout)
+
+    def export_to_csv(self):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM Duit")
+            count = cur.fetchone()[0]
+            
+            if count == 0:
+                QMessageBox.information(self, "Export CSV", "Database kosong. Tidak ada data untuk diekspor.")
+                return
+
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Export Database ke CSV",
+                f"currency_database_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                "CSV Files (*.csv);;All Files (*)"
+            )
+            
+            if not file_path:
+                return  
+
+            cur.execute("SELECT * FROM Duit ORDER BY id")
+            rows = cur.fetchall()
+
+            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+
+                writer.writerow(["ID", "Nama Negara", "Nama Mata Uang", "Rate (USD)", "Waktu"])
+
+                for row in rows:
+                    formatted_row = list(row)
+                    if row[4]:  # If timestamp exists
+                        formatted_row[4] = self.format_timestamp(row[4])
+                    else:
+                        formatted_row[4] = "N/A"
+                    writer.writerow(formatted_row)
+            
+            QMessageBox.information(
+                self, 
+                "Export Berhasil", 
+                f"Database berhasil diekspor ke:\n{file_path}\n\nTotal {count} data berhasil diekspor."
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "Export Error", 
+                f"Gagal mengekspor database:\n{str(e)}"
+            )
 
     def show_database_page(self):
         self.refresh_database_table()
