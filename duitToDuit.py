@@ -1,6 +1,8 @@
 import sys
 import sqlite3
 import requests
+import time
+from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QMessageBox, QComboBox,
@@ -108,10 +110,19 @@ class DuitToDuit(QMainWindow):
                 "namaNegara"	TEXT,
                 "namaMataUang"	TEXT,
                 "perbandinganDariDolar"	REAL,
+                "waktu" INTEGER,
                 PRIMARY KEY("id" AUTOINCREMENT)
             )
         ''')
         self.conn.commit()
+
+    def get_current_timestamp(self):
+        return int(time.time())
+    
+    def format_timestamp(self, timestamp):
+        if timestamp:
+            return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+        return "N/A"
 
     def update_status(self, message):
         self.status_label.setText(message)
@@ -237,8 +248,8 @@ class DuitToDuit(QMainWindow):
         layout.addLayout(button_layout)
         
         self.db_table = QTableWidget()
-        self.db_table.setColumnCount(4)
-        self.db_table.setHorizontalHeaderLabels(["ID", "Nama Negara", "Nama Mata Uang", "Rate (USD)"])
+        self.db_table.setColumnCount(5) 
+        self.db_table.setHorizontalHeaderLabels(["ID", "Nama Negara", "Nama Mata Uang", "Rate (USD)", "Waktu"])
         
         header = self.db_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
@@ -259,7 +270,11 @@ class DuitToDuit(QMainWindow):
         
         for i, row in enumerate(rows):
             for j, value in enumerate(row):
-                self.db_table.setItem(i, j, QTableWidgetItem(str(value)))
+                if j == 4:  
+                    formatted_time = self.format_timestamp(value)
+                    self.db_table.setItem(i, j, QTableWidgetItem(formatted_time))
+                else:
+                    self.db_table.setItem(i, j, QTableWidgetItem(str(value)))
     
     def show_add_currency_dialog(self):
         dialog = AddCurrencyDialog(self)
@@ -280,16 +295,16 @@ class DuitToDuit(QMainWindow):
     def insert_currency_to_db(self, negara, mata_uang, rate):
         try:
             cur = self.conn.cursor()
+            current_time = self.get_current_timestamp()  
             cur.execute("""
-                INSERT INTO Duit (namaNegara, namaMataUang, perbandinganDariDolar) 
-                VALUES (?, ?, ?)
-            """, (negara, mata_uang, rate))
+                INSERT INTO Duit (namaNegara, namaMataUang, perbandinganDariDolar, waktu) 
+                VALUES (?, ?, ?, ?)
+            """, (negara, mata_uang, rate, current_time))
             self.conn.commit()
             
             QMessageBox.information(self, "Berhasil", 
                 f"Mata uang {mata_uang} dari {negara} berhasil ditambahkan ke database!")
-            
-            
+
             if self.stack.currentWidget() == self.database_page:
                 self.refresh_database_table()
                 
@@ -405,7 +420,6 @@ class DuitToDuit(QMainWindow):
             QMessageBox.warning(self, "Network Error", f"Kesalahan jaringan: {e}")
     
     def show_conversion_result_with_options(self, from_cur, to_cur, amount, converted, rate):
-        """Tampilkan hasil konversi dengan opsi untuk menambah mata uang ke database"""
         msg = QMessageBox(self)
         msg.setWindowTitle("Conversion Result")
         msg.setText(f"{amount} {from_cur} = {converted:.2f} {to_cur}\n\nRate: 1 {from_cur} = {rate:.2f} {to_cur}")
@@ -423,7 +437,6 @@ class DuitToDuit(QMainWindow):
             self.add_currency_from_conversion(to_cur, rate if from_cur == "USD" else self.get_usd_rate(to_cur))
     
     def get_usd_rate(self, currency_code):
-        """Ambil rate mata uang terhadap USD"""
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/pair/USD/{currency_code}"
         try:
             response = requests.get(url)
@@ -457,7 +470,6 @@ class DuitToDuit(QMainWindow):
                 elif " Peso" in name:
                     country_name = name.replace(" Peso", "")
                 else:
-                    
                     country_name = name.split()[0] if name.split() else "Unknown"
                 break
         
@@ -487,7 +499,6 @@ class DuitToDuit(QMainWindow):
                 if reply == QMessageBox.Yes:
                     self.update_currency_rate(currency_code, rate_value)
             else:
-                
                 self.insert_currency_to_db(data['negara'], data['mata_uang'], rate_value)
     
     def currency_exists_in_db(self, currency_code):
@@ -502,11 +513,12 @@ class DuitToDuit(QMainWindow):
     def update_currency_rate(self, currency_code, new_rate):
         try:
             cur = self.conn.cursor()
+            current_time = self.get_current_timestamp() 
             cur.execute("""
                 UPDATE Duit 
-                SET perbandinganDariDolar = ? 
+                SET perbandinganDariDolar = ?, waktu = ?
                 WHERE namaMataUang LIKE ?
-            """, (new_rate, f"%{currency_code}%"))
+            """, (new_rate, current_time, f"%{currency_code}%"))
             self.conn.commit()
             
             QMessageBox.information(self, "Berhasil", 
@@ -540,7 +552,6 @@ class DuitToDuit(QMainWindow):
         self.stack.setCurrentWidget(self.currency_page)
     
     def closeEvent(self, event):
-        
         if hasattr(self, 'conn'):
             self.conn.close()
         event.accept()
