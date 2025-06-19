@@ -20,7 +20,7 @@ API_KEY = "df70c2e44c333d54929d40d3"
 class DuitToDuit(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Currency Exchange Rate Notifier")
+        self.setWindowTitle("Duit To Duit")
         self.resize(600, 400)
 
         self.setStyleSheet(light_style)
@@ -82,9 +82,6 @@ class DuitToDuit(QMainWindow):
         if timestamp:
             return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
         return "N/A"
-
-    def update_status(self, message):
-        self.status_label.setText(message)
 
     def init_menu(self):
         menubar = self.menuBar()
@@ -382,43 +379,8 @@ class DuitToDuit(QMainWindow):
     def toggle_dark_mode(self, checked):
         if checked:
             self.setStyleSheet(dark_style)
-            self.update_currency_cards_style(True)
         else:
             self.setStyleSheet(light_style)
-            self.update_currency_cards_style(False)
-    
-    def update_currency_cards_style(self, dark_mode):
-        if hasattr(self, 'currency_container'):
-            for i in range(self.currency_layout.count()):
-                item = self.currency_layout.itemAt(i)
-                if item and item.widget() and isinstance(item.widget(), CurrencyCard):
-                    card = item.widget()
-                    if dark_mode:
-                        card.setStyleSheet("""
-                            QFrame {
-                                background-color: #495057;
-                                border: 2px solid #6c757d;
-                                border-radius: 10px;
-                                margin: 2px;
-                            }
-                            QFrame:hover {
-                                background-color: #6c757d;
-                                border-color: #007bff;
-                            }
-                        """)
-                    else:
-                        card.setStyleSheet("""
-                            QFrame {
-                                background-color: #f8f9fa;
-                                border: 2px solid #e9ecef;
-                                border-radius: 10px;
-                                margin: 2px;
-                            }
-                            QFrame:hover {
-                                background-color: #e9ecef;
-                                border-color: #007bff;
-                            }
-                        """)
 
     def chooseFont(self):
         font, ok = QFontDialog.getFont()
@@ -808,7 +770,6 @@ class CurrencyCard(QFrame):
 
     def setup_styling(self):
         pass
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

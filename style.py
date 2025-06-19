@@ -159,6 +159,31 @@ QStatusBar {
     border-top: 1px solid #dee2e6;
     padding: 2px;
 }
+
+CurrencyCard QLabel#rankLabel {
+    color: #6c757d;
+    min-width: 30px;
+}
+
+CurrencyCard QLabel#weakCurrency {
+    color: #dc3545;
+}
+
+CurrencyCard QLabel#strongCurrency {
+    color: #28a745;
+}
+
+CurrencyCard QLabel#currencyName {
+    color: #6c757d;
+}
+
+CurrencyCard QLabel#rateLabel {
+    color: #333333;
+}
+
+CurrencyCard QLabel#usdLabel {
+    color: #6c757d;
+}
 """
 
 dark_style = """
@@ -346,36 +371,7 @@ QStatusBar {
     border-top: 1px solid #dee2e6;
     padding: 2px;
 }
-"""
 
-light_currency_card_style = """
-CurrencyCard QLabel#rankLabel {
-    color: #6c757d;
-    min-width: 30px;
-}
-
-CurrencyCard QLabel#weakCurrency {
-    color: #dc3545;
-}
-
-CurrencyCard QLabel#strongCurrency {
-    color: #28a745;
-}
-
-CurrencyCard QLabel#currencyName {
-    color: #6c757d;
-}
-
-CurrencyCard QLabel#rateLabel {
-    color: #333333;
-}
-
-CurrencyCard QLabel#usdLabel {
-    color: #6c757d;
-}
-"""
-
-dark_currency_card_style = """
 CurrencyCard QLabel#rankLabel {
     color: #9ca3af;
     min-width: 30px;
