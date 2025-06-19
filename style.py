@@ -347,3 +347,57 @@ QStatusBar {
     padding: 2px;
 }
 """
+
+light_currency_card_style = """
+CurrencyCard QLabel#rankLabel {
+    color: #6c757d;
+    min-width: 30px;
+}
+
+CurrencyCard QLabel#weakCurrency {
+    color: #dc3545;
+}
+
+CurrencyCard QLabel#strongCurrency {
+    color: #28a745;
+}
+
+CurrencyCard QLabel#currencyName {
+    color: #6c757d;
+}
+
+CurrencyCard QLabel#rateLabel {
+    color: #333333;
+}
+
+CurrencyCard QLabel#usdLabel {
+    color: #6c757d;
+}
+"""
+
+dark_currency_card_style = """
+CurrencyCard QLabel#rankLabel {
+    color: #9ca3af;
+    min-width: 30px;
+}
+
+CurrencyCard QLabel#weakCurrency {
+    color: #f87171;
+}
+
+CurrencyCard QLabel#strongCurrency {
+    color: #34d399;
+}
+
+CurrencyCard QLabel#currencyName {
+    color: #9ca3af;
+}
+
+CurrencyCard QLabel#rateLabel {
+    color: #e0e0e0;
+}
+
+CurrencyCard QLabel#usdLabel {
+    color: #9ca3af;
+}
+"""

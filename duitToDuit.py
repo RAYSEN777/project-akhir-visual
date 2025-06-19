@@ -9,56 +9,13 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QMessageBox, QComboBox,
     QScrollArea, QMainWindow, QAction, QStackedWidget, QFontDialog, 
     QListWidget, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
-    QDialogButtonBox, QStatusBar, QFileDialog
+    QDialogButtonBox, QStatusBar, QFileDialog, QFrame
 )
 from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QFont
 from style import light_style, dark_style
 
 API_KEY = "df70c2e44c333d54929d40d3"
-
-class AddCurrencyDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Tambah Mata Uang ke Database")
-        self.setModal(True)
-        self.resize(400, 200)
-        
-        layout = QVBoxLayout()
-        
-        country_layout = QHBoxLayout()
-        country_layout.addWidget(QLabel("Nama Negara:"))
-        self.country_input = QLineEdit()
-        self.country_input.setPlaceholderText("Contoh: Indonesia")
-        country_layout.addWidget(self.country_input)
-        layout.addLayout(country_layout)
-        
-        currency_layout = QHBoxLayout()
-        currency_layout.addWidget(QLabel("Nama Mata Uang:"))
-        self.currency_input = QLineEdit()
-        self.currency_input.setPlaceholderText("Contoh: Rupiah (IDR)")
-        currency_layout.addWidget(self.currency_input)
-        layout.addLayout(currency_layout)
-        
-        rate_layout = QHBoxLayout()
-        rate_layout.addWidget(QLabel("Rate terhadap USD:"))
-        self.rate_input = QLineEdit()
-        self.rate_input.setPlaceholderText("Contoh: 15000 (1 USD = 15000 IDR)")
-        rate_layout.addWidget(self.rate_input)
-        layout.addLayout(rate_layout)
-        
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-        
-        self.setLayout(layout)
-    
-    def get_data(self):
-        return {
-            'negara': self.country_input.text().strip(),
-            'mata_uang': self.currency_input.text().strip(),
-            'rate': self.rate_input.text().strip()
-        }
 
 class DuitToDuit(QMainWindow):
     def __init__(self):
@@ -69,6 +26,7 @@ class DuitToDuit(QMainWindow):
         self.setStyleSheet(light_style)
 
         self.all_currencies = []  
+        self.currency_names = {}
         
         self.init_db()
 
@@ -221,14 +179,38 @@ class DuitToDuit(QMainWindow):
     
     def init_currency_page(self):
         layout = QVBoxLayout()
-        self.top_label = QLabel("Pilih menu di atas untuk melihat top mata uang.")
-        self.top_label.setWordWrap(True)
 
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(self.top_label)
+        self.currency_header = QLabel("Pilih menu di atas untuk melihat top mata uang.")
+        self.currency_header.setFont(QFont("Arial", 16, QFont.Bold))
+        self.currency_header.setAlignment(Qt.AlignCenter)
+        self.currency_header.setStyleSheet("""
+            QLabel {
+                background-color: #007bff;
+                color: white;
+                padding: 15px;
+                border-radius: 10px;
+                margin: 10px;
+            }
+        """)
+        layout.addWidget(self.currency_header)
 
-        layout.addWidget(scroll_area)
+        self.last_update_label = QLabel("")
+        self.last_update_label.setAlignment(Qt.AlignCenter)
+        self.last_update_label.setStyleSheet("color: #6c757d; margin: 5px;")
+        layout.addWidget(self.last_update_label)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        self.currency_container = QWidget()
+        self.currency_layout = QVBoxLayout(self.currency_container)
+        self.currency_layout.setSpacing(5)
+        self.currency_layout.addStretch()
+        
+        self.scroll_area.setWidget(self.currency_container)
+        layout.addWidget(self.scroll_area)
+        
         self.currency_page.setLayout(layout)
     
     def init_database_page(self):
@@ -295,7 +277,7 @@ class DuitToDuit(QMainWindow):
 
                 for row in rows:
                     formatted_row = list(row)
-                    if row[4]:  # If timestamp exists
+                    if row[4]: 
                         formatted_row[4] = self.format_timestamp(row[4])
                     else:
                         formatted_row[4] = "N/A"
@@ -400,8 +382,43 @@ class DuitToDuit(QMainWindow):
     def toggle_dark_mode(self, checked):
         if checked:
             self.setStyleSheet(dark_style)
+            self.update_currency_cards_style(True)
         else:
             self.setStyleSheet(light_style)
+            self.update_currency_cards_style(False)
+    
+    def update_currency_cards_style(self, dark_mode):
+        if hasattr(self, 'currency_container'):
+            for i in range(self.currency_layout.count()):
+                item = self.currency_layout.itemAt(i)
+                if item and item.widget() and isinstance(item.widget(), CurrencyCard):
+                    card = item.widget()
+                    if dark_mode:
+                        card.setStyleSheet("""
+                            QFrame {
+                                background-color: #495057;
+                                border: 2px solid #6c757d;
+                                border-radius: 10px;
+                                margin: 2px;
+                            }
+                            QFrame:hover {
+                                background-color: #6c757d;
+                                border-color: #007bff;
+                            }
+                        """)
+                    else:
+                        card.setStyleSheet("""
+                            QFrame {
+                                background-color: #f8f9fa;
+                                border: 2px solid #e9ecef;
+                                border-radius: 10px;
+                                margin: 2px;
+                            }
+                            QFrame:hover {
+                                background-color: #e9ecef;
+                                border-color: #007bff;
+                            }
+                        """)
 
     def chooseFont(self):
         font, ok = QFontDialog.getFont()
@@ -417,6 +434,7 @@ class DuitToDuit(QMainWindow):
             data = response.json()
             if data["result"] == "success":
                 self.all_currencies = data["supported_codes"]
+                self.currency_names = {code: name for code, name in self.all_currencies}
                 codes = [f"{code} - {name}" for code, name in self.all_currencies]
                 self.from_currency.addItems(codes)
                 self.to_currency.addItems(codes)
@@ -587,7 +605,19 @@ class DuitToDuit(QMainWindow):
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Database Error", f"Gagal mengupdate rate: {e}")
 
+    def clear_currency_layout(self):
+        while self.currency_layout.count() > 1:  
+            child = self.currency_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
     def show_top_currencies(self, order="desc"):
+        self.currency_header.setText("Mengambil data mata uang...")
+        self.last_update_label.setText("")
+        self.clear_currency_layout()
+
+        self.stack.setCurrentWidget(self.currency_page)
+        
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD"
         try:
             response = requests.get(url)
@@ -596,22 +626,189 @@ class DuitToDuit(QMainWindow):
                 rates = data["conversion_rates"]
                 sorted_rates = sorted(rates.items(), key=lambda x: x[1], reverse=(order=="desc"))
                 top_20 = sorted_rates[:20]
+
                 title = "Terlemah" if order == "desc" else "Terkuat"
-                text = f"<b>Top 20 Mata Uang {title.capitalize()} terhadap USD:</b><br><br>"
-                for code, rate in top_20:
-                    text += f"{code}: {rate:.2f}<br>"
-                self.top_label.setText(text)
-                self.stack.setCurrentWidget(self.currency_page)
+                self.currency_header.setText(f"Top 20 Mata Uang {title} terhadap USD")
+ 
+                current_time = datetime.now().strftime("%d %B %Y, %H:%M:%S")
+                self.last_update_label.setText(f"Terakhir diupdate: {current_time}")
+
+                self.clear_currency_layout()
+
+                is_weak = order == "desc"
+                for rank, (code, rate) in enumerate(top_20, 1):
+                    currency_name = self.currency_names.get(code, "")
+                    card = CurrencyCard(rank, code, rate, currency_name, is_weak)
+                    self.currency_layout.insertWidget(self.currency_layout.count() - 1, card)
+
+                summary_frame = QFrame()
+                summary_frame.setFrameStyle(QFrame.Box)
+                summary_frame.setStyleSheet("""
+                    QFrame {
+                        background-color: #e3f2fd;
+                        border: 2px solid #2196f3;
+                        border-radius: 10px;
+                        margin: 10px;
+                        padding: 10px;
+                    }
+                """)
+                
+                summary_layout = QVBoxLayout(summary_frame)
+
+                rates_values = [rate for _, rate in top_20]
+                avg_rate = sum(rates_values) / len(rates_values)
+                min_rate = min(rates_values)
+                max_rate = max(rates_values)
+                
+                summary_text = f"""
+                <b>Statistik:</b><br>
+                • Rata-rata rate: {avg_rate:.4f}<br>
+                • Rate terendah: {min_rate:.4f}<br>
+                • Rate tertinggi: {max_rate:.4f}<br>
+                • Total mata uang ditampilkan: {len(top_20)}
+                """
+                
+                summary_label = QLabel(summary_text)
+                summary_label.setWordWrap(True)
+                summary_layout.addWidget(summary_label)
+                
+                self.currency_layout.insertWidget(self.currency_layout.count() - 1, summary_frame)
+ 
+                note_label = QLabel("""
+                <i>Catatan: Rate menunjukkan berapa unit mata uang yang diperlukan untuk membeli 1 USD.<br>
+                """)
+                note_label.setWordWrap(True)
+                note_label.setStyleSheet("""
+                    background-color: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    border-radius: 5px;
+                    padding: 10px;
+                    margin: 10px;
+                """)
+                self.currency_layout.insertWidget(self.currency_layout.count() - 1, note_label)
+                
             else:
-                self.top_label.setText("Gagal mengambil data nilai tukar.")
+                self.currency_header.setText("Gagal mengambil data nilai tukar")
+                error_label = QLabel("Terjadi kesalahan saat mengambil data dari API. Silakan coba lagi nanti.")
+                error_label.setAlignment(Qt.AlignCenter)
+                error_label.setStyleSheet("color: #dc3545; padding: 20px;")
+                self.currency_layout.insertWidget(0, error_label)
+                
         except Exception as e:
-            self.top_label.setText(f"Kesalahan jaringan: {e}")
-        self.stack.setCurrentWidget(self.currency_page)
+            self.currency_header.setText("Kesalahan Jaringan")
+            error_label = QLabel(f"Kesalahan jaringan: {str(e)}\n\nPastikan koneksi internet Anda stabil dan coba lagi.")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("color: #dc3545; padding: 20px;")
+            error_label.setWordWrap(True)
+            self.currency_layout.insertWidget(0, error_label)
     
     def closeEvent(self, event):
         if hasattr(self, 'conn'):
             self.conn.close()
         event.accept()
+
+class AddCurrencyDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Tambah Mata Uang ke Database")
+        self.setModal(True)
+        self.resize(400, 200)
+        
+        layout = QVBoxLayout()
+        
+        country_layout = QHBoxLayout()
+        country_layout.addWidget(QLabel("Nama Negara:"))
+        self.country_input = QLineEdit()
+        self.country_input.setPlaceholderText("Contoh: Indonesia")
+        country_layout.addWidget(self.country_input)
+        layout.addLayout(country_layout)
+        
+        currency_layout = QHBoxLayout()
+        currency_layout.addWidget(QLabel("Nama Mata Uang:"))
+        self.currency_input = QLineEdit()
+        self.currency_input.setPlaceholderText("Contoh: Rupiah (IDR)")
+        currency_layout.addWidget(self.currency_input)
+        layout.addLayout(currency_layout)
+        
+        rate_layout = QHBoxLayout()
+        rate_layout.addWidget(QLabel("Rate terhadap USD:"))
+        self.rate_input = QLineEdit()
+        self.rate_input.setPlaceholderText("Contoh: 15000 (1 USD = 15000 IDR)")
+        rate_layout.addWidget(self.rate_input)
+        layout.addLayout(rate_layout)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.setLayout(layout)
+    
+    def get_data(self):
+        return {
+            'negara': self.country_input.text().strip(),
+            'mata_uang': self.currency_input.text().strip(),
+            'rate': self.rate_input.text().strip()
+        }
+
+class CurrencyCard(QFrame):
+    def __init__(self, rank, code, rate, currency_name="", is_weak=True):
+        super().__init__()
+        self.setFrameStyle(QFrame.Box)
+        self.setLineWidth(1)
+        self.setFixedHeight(80)
+
+        self.setup_styling()
+        
+        layout = QHBoxLayout()
+        layout.setContentsMargins(15, 10, 15, 10)
+
+        rank_label = QLabel(f"{rank}")
+        rank_label.setFont(QFont("Arial", 14, QFont.Bold))
+        rank_label.setObjectName("rankLabel")
+        rank_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(rank_label)
+
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+
+        code_label = QLabel(code)
+        code_label.setFont(QFont("Arial", 12, QFont.Bold))
+        code_label.setObjectName("weakCurrency" if is_weak else "strongCurrency")
+        info_layout.addWidget(code_label)
+
+        if currency_name and currency_name != code:
+            name_label = QLabel(currency_name[:25] + "..." if len(currency_name) > 25 else currency_name)
+            name_label.setFont(QFont("Arial", 9))
+            name_label.setObjectName("currencyName")
+            info_layout.addWidget(name_label)
+        else:
+            info_layout.addStretch()
+            
+        layout.addLayout(info_layout)
+        layout.addStretch()
+
+        rate_layout = QVBoxLayout()
+        rate_layout.setSpacing(2)
+        
+        rate_label = QLabel(f"{rate:.4f}")
+        rate_label.setFont(QFont("Arial", 11, QFont.Bold))
+        rate_label.setAlignment(Qt.AlignRight)
+        rate_label.setObjectName("rateLabel")
+        rate_layout.addWidget(rate_label)
+        
+        usd_label = QLabel("per USD")
+        usd_label.setFont(QFont("Arial", 8))
+        usd_label.setObjectName("usdLabel")
+        usd_label.setAlignment(Qt.AlignRight)
+        rate_layout.addWidget(usd_label)
+        
+        layout.addLayout(rate_layout)
+        self.setLayout(layout)
+
+    def setup_styling(self):
+        pass
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
