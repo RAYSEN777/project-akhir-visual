@@ -469,21 +469,28 @@ class DuitToDuit(QMainWindow):
         msg.exec_()
         
         if msg.clickedButton() == btn_add_from:
-            self.add_currency_from_conversion(from_cur, 1.0)  
+            from_usd_rate = self.get_usd_rate(from_cur) if from_cur != "USD" else 1.0
+            self.add_currency_from_conversion(from_cur, from_usd_rate)
         elif msg.clickedButton() == btn_add_to:
-            self.add_currency_from_conversion(to_cur, rate if from_cur == "USD" else self.get_usd_rate(to_cur))
-    
+            to_usd_rate = self.get_usd_rate(to_cur) if to_cur != "USD" else 1.0
+            self.add_currency_from_conversion(to_cur, to_usd_rate)
+
     def get_usd_rate(self, currency_code):
+        if currency_code == "USD":
+            return 1.0
+            
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/pair/USD/{currency_code}"
         try:
             response = requests.get(url)
             data = response.json()
             if data["result"] == "success":
                 return data["conversion_rate"]
+            else:
+                print(f"API Error getting USD rate for {currency_code}: {data.get('error-type', 'Unknown error')}")
         except Exception as e:
-            print(f"Error getting USD rate: {e}")
+            print(f"Error getting USD rate for {currency_code}: {e}")
         return 1.0
-    
+
     def add_currency_from_conversion(self, currency_code, rate):
         currency_name = "Unknown Currency"
         country_name = "Unknown Country"
@@ -491,25 +498,8 @@ class DuitToDuit(QMainWindow):
         for code, name in self.all_currencies:
             if code == currency_code:
                 currency_name = name
-                
-                if " Dollar" in name:
-                    country_name = name.replace(" Dollar", "")
-                elif " Pound" in name:
-                    country_name = name.replace(" Pound", "")
-                elif " Euro" in name:
-                    country_name = "European Union"
-                elif " Yen" in name:
-                    country_name = "Japan"
-                elif " Yuan" in name or " Renminbi" in name:
-                    country_name = "China"
-                elif " Rupiah" in name:
-                    country_name = "Indonesia"
-                elif " Peso" in name:
-                    country_name = name.replace(" Peso", "")
-                else:
-                    country_name = name.split()[0] if name.split() else "Unknown"
-                break
-        
+                country_name = name.split()[0] if name.split() else "Unknown"
+
         dialog = AddCurrencyDialog(self)
         dialog.country_input.setText(country_name)
         dialog.currency_input.setText(f"{currency_name} ({currency_code})")
